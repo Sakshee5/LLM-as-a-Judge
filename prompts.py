@@ -1,8 +1,8 @@
-evaluation_prompt = """
+criteria_based_evaluation_prompt = """
 Please evaluate the following response based on {criteria}. 
 
 Provide a detailed analysis including:
-1. Score (1-10)
+1. Score (0-10)
 2. Detailed explanation of the score
 3. Specific strengths
 4. Areas for improvement
@@ -20,6 +20,22 @@ Format your response as JSON:
     "observations": "<key observations>"
 }}
 """
+
+reference_based_eval_prompt = """Compare the following model response to the reference answer:
+Reference: {reference_answer}
+Response: {model_response}
+
+Evaluate the response based on:
+1. Factual accuracy compared to reference. Provide a score (0-10)
+2. Coverage of key points
+3. Any incorrect or missing information
+
+
+Format your response as JSON:
+{{
+    "score": <score>,
+    "explanation": "<detailed explanation>",
+}}"""
 
 
 comparison_prompt = """

@@ -1,6 +1,6 @@
 import streamlit as st
 from openai_utils import get_response
-from prompts import evaluation_prompt, comparison_prompt
+from prompts import criteria_based_evaluation_prompt, reference_based_eval_prompt, comparison_prompt
 
 def initialize_session_states():
     if 'judge_model' not in st.session_state:
@@ -14,6 +14,9 @@ def initialize_session_states():
 
     if 'crf_response' not in st.session_state:
         st.session_state.crf_response = ""
+
+    if 'rbe_response' not in st.session_state:
+        st.session_state.rbe_response = ""
 
 
 
@@ -110,7 +113,7 @@ def evaluation_by_criteria_ref_free():
         st.subheader("Detailed Evaluation for each criteria")
         for cri in criteria_list:
             with st.spinner(f"Evaluating Responses for {cri}..."):
-                eval_result = get_response(evaluation_prompt.format(criteria=cri, response=st.session_state.crf_response), st.session_state.judge_model)
+                eval_result = get_response(criteria_based_evaluation_prompt.format(criteria=cri, response=st.session_state.crf_response), st.session_state.judge_model)
 
             if eval_result:
                 # Display detailed evaluation
@@ -128,6 +131,32 @@ def evaluation_by_criteria_ref_free():
                         
                     st.write(f"\n**Key Observations:** {eval_result['observations']}")
 
+
+def reference_based_evaluation():
+    """Evaluate responses against a reference/ground truth answer"""
+    st.subheader("Reference-Based Evaluation")
+    
+    # Input fields
+    prompt = st.text_area("Enter your prompt:", value="What is the primary purpose of backpropagation algorithm in neural networks?")
+    reference_answer = st.text_area("Enter reference answer:", value="To calculate gradients and update weights to minimize errors")
+    model = st.selectbox("Select Model", available_models, key="ref_model")
+    
+    if prompt and reference_answer and st.button("Generate"):
+        with st.spinner("Generating response..."):
+            st.session_state.rbe_response = get_response(prompt, model, json_format=False)
+            
+    if st.session_state.rbe_response:
+        st.write(f"**{model} Response:**")
+        st.write(st.session_state.rbe_response)
+        
+    if st.session_state.rbe_response and st.button("Evaluate"):
+        eval_result = get_response(reference_based_eval_prompt.format(reference_answer=reference_answer, model_response=st.session_state.rbe_response), st.session_state.judge_model)
+        
+        if eval_result:
+            st.write(f"**Score:** {eval_result['score']}/10")
+            st.write(f"**Detailed Explanation:** {eval_result['explanation']}")
+
+
 def main():
     initialize_session_states()
 
@@ -135,7 +164,8 @@ def main():
 
     evaluation_methods = {
         "Pairwise Comparison": pairwise_comparison,
-        "Reference Free - Criteria Evaluation": evaluation_by_criteria_ref_free
+        "Reference-Free Criteria Evaluation": evaluation_by_criteria_ref_free,
+        "Reference-based Evaluation": reference_based_evaluation,
     }
     
     method = st.sidebar.selectbox(
@@ -148,7 +178,8 @@ def main():
     
     descriptions = {
         "Pairwise Comparison": "Compare two LLM responses directly to determine which is better",
-        "Reference Free - Criteria Evaluation": "Evaluate as per a defined criteria without ground truth",
+        "Reference-Free Criteria Evaluation": "Evaluate as per a defined criteria without ground truth",
+        "Reference-based Evaluation": "Evaluate responses against a reference/ground truth answer",
     }
     
     st.sidebar.write(descriptions[method])
