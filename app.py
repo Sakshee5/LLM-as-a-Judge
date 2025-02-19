@@ -1,6 +1,11 @@
 import streamlit as st
 from openai_utils import get_response
 from prompts import criteria_based_evaluation_prompt, reference_based_eval_prompt, comparison_prompt, detect_hallucinations
+import pandas as pd
+from nltk.translate.bleu_score import sentence_bleu
+from rouge import Rouge
+from Levenshtein import distance as levenshtein_distance
+from sentence_transformers import SentenceTransformer
 
 def initialize_session_states():
     if 'judge_model' not in st.session_state:
@@ -184,6 +189,72 @@ def detect_hallucination_eval():
             st.write(f"**Detailed Explanation:** {eval_result['explanation']}")
             st.write(f"**Correct Answer:** {eval_result['correct answer']}")
 
+def evaluate_nonllm():
+    evaluation_results = [
+            ["BLEU",  "BLEU measures word overlap between the response and the ground truth."],
+            ["ROUGE-1", "ROUGE-1 considers unigram (single-word) overlap."],
+            ["ROUGE-2", "ROUGE-2 considers bigram (two-word sequence) overlap."],
+            ["ROUGE-L", "ROUGE-L focuses on the longest matching subsequence, meaning it rewards responses that follow the word order of the reference."],
+            ["BERTScore", "BERTScore uses semantic similarity based on embeddings."],
+            ["Edit Distance", "Measures how many character-level edits (insertions, deletions, or substitutions) are needed to transform the bot response into the ground truth."],
+        ]
+
+    st.dataframe(pd.DataFrame(evaluation_results, columns=["Metric", "Definition"]))
+     
+    scenario = st.selectbox("Choose an Example", 
+                        ["Return Policy (Slight Change)",
+                         "Math Answer (Factually Wrong, High Score)",
+                         "Paraphrased Answer (Correct but Penalized)"])
+
+    if scenario == "Return Policy (Slight Change)":
+        user_question = "What is your return policy?"
+        bot_response = "You can return items within 30 days."
+        ground_truth = "You can return items within 30 days of purchase."
+    elif scenario == "Math Answer (Factually Wrong, High Score)":
+        user_question = "What is the sum of 15 and 27?"
+        bot_response = "The sum of 15 and 27 is 43."
+        ground_truth = "The sum of 15 and 27 is 42."
+    elif scenario == "Paraphrased Answer (Correct but Penalized)":
+        user_question = "What is the capital of France?"
+        bot_response = "Paris is the capital city of France."
+        ground_truth = "The capital of France is Paris."
+
+    st.write(f"Question: {user_question}")
+    st.write(f"Bot Response: {bot_response}")
+    st.write(f"Ground Truth: {ground_truth}")
+
+    results = {}
+
+    if st.button("Evaluate"):
+        with st.spinner("Generating evaluation..."):
+            model = SentenceTransformer("all-MiniLM-L6-v2")
+
+            # BLEU Score
+            reference = [ground_truth.split()]
+            candidate = bot_response.split()
+            results["BLEU"] = sentence_bleu(reference, candidate)
+
+            # ROUGE Score
+            rouge = Rouge()
+            scores = rouge.get_scores(bot_response, ground_truth)
+            results["ROUGE-1"] = scores[0]['rouge-1']['f']
+            results["ROUGE-2"] = scores[0]['rouge-2']['f']
+            results["ROUGE-L"] = scores[0]['rouge-l']['f']
+
+            # BERTScore
+            embeddings1 = model.encode([bot_response])[0]
+            embeddings2 = model.encode([ground_truth])[0]
+            cosine_similarity = (embeddings1 @ embeddings2) / (sum(embeddings1**2)**0.5 * sum(embeddings2**2)**0.5)
+            results["BERTScore"] = cosine_similarity
+
+            # Edit Distance
+            results["Edit Distance"] = levenshtein_distance(bot_response, ground_truth)
+
+    if results:
+        st.write("### Evaluation Results")
+        for metric, score in results.items():
+            st.write(f"**{metric}:** {score:.3f}")
+
 
 def main():
     initialize_session_states()
@@ -191,6 +262,7 @@ def main():
     st.title("LLM-As-a-Judge")
 
     evaluation_methods = {
+        "Non-LLM Evaluation": evaluate_nonllm,
         "Pairwise Comparison": pairwise_comparison,
         "Reference-Free Criteria Evaluation": evaluation_by_criteria_ref_free,
         "Reference-based Evaluation": reference_based_evaluation,
@@ -206,6 +278,7 @@ def main():
     st.sidebar.markdown("### Method Description")
     
     descriptions = {
+        "Non-LLM Evaluation": "Compare a bot response against ground truth using traditional NLP metrics.",
         "Pairwise Comparison": "Compare two LLM responses directly to determine which is better",
         "Reference-Free Criteria Evaluation": "Evaluate as per a defined criteria without ground truth",
         "Reference-based Evaluation": "Evaluate responses against a reference/ground truth answer",
