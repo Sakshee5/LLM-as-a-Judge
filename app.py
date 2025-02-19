@@ -1,6 +1,6 @@
 import streamlit as st
 from openai_utils import get_response
-from prompts import criteria_based_evaluation_prompt, reference_based_eval_prompt, comparison_prompt
+from prompts import criteria_based_evaluation_prompt, reference_based_eval_prompt, comparison_prompt, detect_hallucinations
 
 def initialize_session_states():
     if 'judge_model' not in st.session_state:
@@ -17,6 +17,9 @@ def initialize_session_states():
 
     if 'rbe_response' not in st.session_state:
         st.session_state.rbe_response = ""
+    
+    if 'dh_response' not in st.session_state:
+        st.session_state.dh_response = ""
 
 
 
@@ -150,11 +153,36 @@ def reference_based_evaluation():
         st.write(st.session_state.rbe_response)
         
     if st.session_state.rbe_response and st.button("Evaluate"):
-        eval_result = get_response(reference_based_eval_prompt.format(reference_answer=reference_answer, model_response=st.session_state.rbe_response), st.session_state.judge_model)
+        with st.spinner("Generating evaluation..."):
+            eval_result = get_response(reference_based_eval_prompt.format(reference_answer=reference_answer, model_response=st.session_state.rbe_response), st.session_state.judge_model)
         
         if eval_result:
             st.write(f"**Score:** {eval_result['score']}/10")
             st.write(f"**Detailed Explanation:** {eval_result['explanation']}")
+
+
+def detect_hallucination_eval():
+    with open("QA_context.txt", mode='r', encoding='utf-8') as f:
+        context = f.read()
+
+    question = st.text_input("Ask question about Apples Financial Statements for 2024", value="What is the percentage change in Apple's term debt (current + non-current) from September 30, 2023, to September 28, 2024? While calculating, make a minor error that a huamn might not be able to see immediately.")
+    model = st.selectbox("Select Model", available_models, key="ref_model")
+
+    if question and st.button("Generate"):
+        with st.spinner("Generating response..."):
+            st.session_state.dh_response = get_response(f"Context: {context}\n\n Question: {question}\n\nAlso mention the data/source that helped you asnwer the question.", model, json_format=False)
+
+    if st.session_state.dh_response:
+        st.write(f"**{model} Response:**")
+        st.write(st.session_state.dh_response)
+        
+    if st.session_state.dh_response and st.button("Evaluate"):
+        with st.spinner("Generating evaluation..."):
+            eval_result = get_response(detect_hallucinations.format(context = context, question=question, response=st.session_state.dh_response), st.session_state.judge_model)
+        
+        if eval_result:
+            st.write(f"**Detailed Explanation:** {eval_result['explanation']}")
+            st.write(f"**Correct Answer:** {eval_result['correct answer']}")
 
 
 def main():
@@ -166,6 +194,7 @@ def main():
         "Pairwise Comparison": pairwise_comparison,
         "Reference-Free Criteria Evaluation": evaluation_by_criteria_ref_free,
         "Reference-based Evaluation": reference_based_evaluation,
+        "Hallucination Detection": detect_hallucination_eval,
     }
     
     method = st.sidebar.selectbox(
@@ -180,6 +209,7 @@ def main():
         "Pairwise Comparison": "Compare two LLM responses directly to determine which is better",
         "Reference-Free Criteria Evaluation": "Evaluate as per a defined criteria without ground truth",
         "Reference-based Evaluation": "Evaluate responses against a reference/ground truth answer",
+        "Hallucination Detection": "Evaluate response for hallucinations.",
     }
     
     st.sidebar.write(descriptions[method])

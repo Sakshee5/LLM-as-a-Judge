@@ -68,3 +68,23 @@ Format your response as JSON:
     }}
 }}
 """
+
+detect_hallucinations = """You will be provided with context, the question asked and the answer generated.
+
+Since the question asked is a bit complicated and based on quantitative data, there is a chance that the AI model generating the response may have hallucinated numbers or data.
+Your job is to detect any hallucinations and provide an explanation for the same.
+
+Context:
+{context}
+
+Question:
+{question}
+
+Model Response:
+{response}
+
+Format your response as JSON:
+{{
+    "explanation": "<detailed explanation>",
+    "correct answer": "succinct correct answer if not already answered correctly. Else, just say already answered correctly."
+}}"""
