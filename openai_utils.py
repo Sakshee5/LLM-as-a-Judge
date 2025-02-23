@@ -9,8 +9,8 @@ if 'api_key' not in st.session_state:
         st.session_state.api_key = None
 
 # Initialize OpenAI client
-# client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-client = OpenAI(api_key=st.session_state.api_key)
+if st.session_state.api_key:
+    client = OpenAI(api_key=st.session_state.api_key)
 
 def get_response(user_prompt, model, json_format=True):
     if json_format:
