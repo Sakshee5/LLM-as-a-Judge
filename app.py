@@ -191,6 +191,7 @@ def detect_hallucination_eval():
 
 def evaluate_nonllm():
     evaluation_results = [
+            ["Exact Match", "Whether the response and ground truth are the exact same."],
             ["BLEU",  "BLEU measures word overlap between the response and the ground truth."],
             ["ROUGE-1", "ROUGE-1 considers unigram (single-word) overlap."],
             ["ROUGE-2", "ROUGE-2 considers bigram (two-word sequence) overlap."],
@@ -228,6 +229,12 @@ def evaluate_nonllm():
     if st.button("Evaluate"):
         with st.spinner("Generating evaluation..."):
             model = SentenceTransformer("all-MiniLM-L6-v2")
+
+            # Exact Match
+            if bot_response == ground_truth:
+                results["Exact Match"] = 1
+            else:
+                results['Exact Match'] = 0
 
             # BLEU Score
             reference = [ground_truth.split()]
@@ -268,6 +275,8 @@ def main():
         "Reference-based Evaluation": reference_based_evaluation,
         "Hallucination Detection": detect_hallucination_eval,
     }
+
+    st.session_state.api_key = st.sidebar.text_input("Enter OpenAI API Key", type="password")
     
     method = st.sidebar.selectbox(
         "Select Evaluation Method",
@@ -285,9 +294,13 @@ def main():
         "Hallucination Detection": "Evaluate response for hallucinations.",
     }
     
-    st.sidebar.write(descriptions[method])
+    if not st.session_state.api_key:
+        st.error("Please provide an API key.")
     
-    evaluation_methods[method]()
+    else:
+        st.sidebar.write(descriptions[method])
+        
+        evaluation_methods[method]()
 
 if __name__ == "__main__":
     main()
